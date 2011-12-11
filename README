@@ -2,4 +2,6 @@ Title: Motion Control Arduino Sketch
 By: J.P. Reardon <http://jpreardon.com>
 Create Date: 2011-12-11
 
-The code here is to control 5 servos connected to an Arduino Uno. This is my first attempt at working with an Arduino, so this code is really, really basic and cobbled together from other people's work. Please see credit where credit is due inline :)
+The code here is to control 5 servos connected to an Arduino Uno. This is my first attempt at working with an Arduino, so this code is really, really basic and cobbled together from other people's work. 
+
+Right now, I'm using the VarSpeedServo library from Korman, which I found here http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1276899740.
