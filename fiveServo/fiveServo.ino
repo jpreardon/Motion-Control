@@ -2,10 +2,10 @@
 // Created: 2011-11-25
 // JP Reardon http://jpreardon.com/
 // Modified 2011-12-11: Testing out slow servo functions
-// Modified 2011-12-13: Refactoring a bit, adding center offsets and min/max angles
+// Modified 2011-12-13: Refactoring a bit, adding center offsets, min/max angles, and serial control
 
 #include <Servo.h>
-
+#include <SoftwareSerial.h>
 
 Servo servo[5];           // Servo array
 const int buttonPin = 8;   // The number of the pushbutton pin
@@ -15,11 +15,18 @@ int servoCenterOffset[5];  // Declare the servoCenterOffset array
 int servoMinAngle;         // Declare the minimum angle variable
 int servoMaxAngle;         // Declare the maximum angle variable
 int servoSpeed;            // Declare the speed variable
+const String versionNumber = "0.1";
+String commandString;
+int servoPosition[5] = {50, 50, 50, 50, 50};
 
 void setup()
 {
   pinMode(buttonPin, INPUT);  // Initialize the button pin as an input
   pinMode(ledPin, OUTPUT);    // Initialize the LED pin as output
+  
+  Serial.begin(9600);
+  Serial.print("fiveServo ");
+  Serial.println(versionNumber);
   
   // Attach servos to their respective outputs
   servo[0].attach(2);
@@ -39,9 +46,11 @@ void setup()
   
   servoMinAngle = 15;     // Set the servo minimum angle
   servoMaxAngle = 165;    // Set the servo maximum angle
-  servoSpeed = 15;        // Set the speed
+  servoSpeed = 9;         // Set the speed
   
-  startUpExercise();      // Run the startup exercise, this should be cooler than it is
+  Serial.println("Begining Startup Exercise");
+  startUpExercise();                                          // Run the startup exercise, this should be cooler than it is
+  Serial.println("Exercise complete, ready for input...");
 }
 
 
@@ -63,10 +72,27 @@ void loop()
    }
   }
   
+  // Check for input from serial, if we have some, do some moves
+  if(Serial.available() > 0){
+    commandString = commandString + char(Serial.read());
+    if(commandString.endsWith("$")){
+      // Remove the control character at the end
+      commandString = commandString.substring(0, commandString.length() - 1);
+      // Put the position in the array
+      servoPosition[stringToInt(commandString.substring(0, 1))] = stringToInt(commandString.substring(2, commandString.length()));
+      // Say what we are doing
+      Serial.println("Moving " + commandString.substring(0, 1) + " to " + String(servoPosition[stringToInt(commandString.substring(0, 1))]));
+      // Empty the commandString
+      commandString = "";
+      // Do the move
+      moveAllByPercent(servoPosition[0], servoPosition[1], servoPosition[2], servoPosition[3], servoPosition[4]);
+      Serial.println("Done, current positions: " + String(servoPosition[0]) + ", " + String(servoPosition[1]) + ", " + servoPosition[2] + ", " + String(servoPosition[3]) + ", " + String(servoPosition[4]));
+    }
+  }
+  
   // Start conditional run block if run == true
   if(run == true){
-    
-    
+  
 
   } // End conditional run block
 }
@@ -80,7 +106,6 @@ void startUpExercise(){
   moveAllByPercent(0, 0, 100, 0, 0);
   moveAllByPercent(0, 0, 0, 100, 0);
   moveAllByPercent(0, 0, 0, 0, 100);
-  moveAllByPercent(0, 0, 0, 0, 0);
   moveAllByPercent(50, 50, 50, 50, 50);
   moveAllByPercent(0, 100, 0, 100, 0);
   moveAllByPercent(100, 0, 100, 0, 100);
@@ -140,4 +165,12 @@ void slowMoveAll(int delayTime, int pos1, int pos2, int pos3, int pos4, int pos5
     }
     delay(delayTime);
   }
+}
+
+// This converts String objects to integers, it does no error checking at all
+int stringToInt(String ourString){
+  char this_char[ourString.length() + 1];
+  ourString.toCharArray(this_char, sizeof(this_char));
+  int iOurString = atoi(this_char); 
+  return iOurString;
 }
