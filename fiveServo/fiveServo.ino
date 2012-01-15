@@ -1,16 +1,14 @@
 // 5 Servos Controlled by a total amature
 // Created: 2011-11-25
 // JP Reardon http://jpreardon.com/
-// Modified 2011-12-11: Testing out slow servo functions
+// Modified 2012-01-02: Getting rid of the pushbutton and LED stuff, for now anyway
 // Modified 2011-12-13: Refactoring a bit, adding center offsets, min/max angles, and serial control
+// Modified 2011-12-11: Testing out slow servo functions
 
 #include <Servo.h>
 #include <SoftwareSerial.h>
 
 Servo servo[5];           // Servo array
-const int buttonPin = 8;   // The number of the pushbutton pin
-const int ledPin = 13;
-boolean run = false;       // Declare and set the run variable
 int servoCenterOffset[5];  // Declare the servoCenterOffset array
 int servoMinAngle;         // Declare the minimum angle variable
 int servoMaxAngle;         // Declare the maximum angle variable
@@ -21,9 +19,8 @@ int servoPosition[5] = {50, 50, 50, 50, 50};
 
 void setup()
 {
-  pinMode(buttonPin, INPUT);  // Initialize the button pin as an input
-  pinMode(ledPin, OUTPUT);    // Initialize the LED pin as output
-  
+ 
+  // Set up the serial connection and send some junk
   Serial.begin(9600);
   Serial.print("fiveServo ");
   Serial.println(versionNumber);
@@ -39,10 +36,10 @@ void setup()
   // This is done to adjust for mechanical differences in the servos or in
   // the attached mechanisim. The center offset is applied to all movements.
   servoCenterOffset[0] = 0;
-  servoCenterOffset[1] = -6; 
-  servoCenterOffset[2] = -5; 
-  servoCenterOffset[3] = -6; 
-  servoCenterOffset[4] = 3;
+  servoCenterOffset[1] = -3; 
+  servoCenterOffset[2] = 0; 
+  servoCenterOffset[3] = -2; 
+  servoCenterOffset[4] = 2;
   
   servoMinAngle = 15;     // Set the servo minimum angle
   servoMaxAngle = 165;    // Set the servo maximum angle
@@ -56,23 +53,7 @@ void setup()
 
 void loop()
 {
-  // Check the button state, this is a hack, need an interrupt here 
-  if(digitalRead(buttonPin) == 0){
-   // Toogle the run state
-   if(run == false){
-     run = true;
-     digitalWrite(ledPin, HIGH);
-     delay(1000);
-   }
-   else
-   {
-     run = false;
-     digitalWrite(ledPin, LOW);
-     delay(1000);                 // Without this delay, the loop starts again and reads the button as being pressed, hence, the thing never stopped :P
-   }
-  }
-  
-  // Check for input from serial, if we have some, do some moves
+  // Check for input from serial, if we have some, make some moves
   if(Serial.available() > 0){
     commandString = commandString + char(Serial.read());
     if(commandString.endsWith("$")){
@@ -89,12 +70,6 @@ void loop()
       Serial.println("Done, current positions: " + String(servoPosition[0]) + ", " + String(servoPosition[1]) + ", " + servoPosition[2] + ", " + String(servoPosition[3]) + ", " + String(servoPosition[4]));
     }
   }
-  
-  // Start conditional run block if run == true
-  if(run == true){
-  
-
-  } // End conditional run block
 }
 
 // This moves all of the servos their entire range a couple times
