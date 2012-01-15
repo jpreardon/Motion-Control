@@ -27,7 +27,8 @@ get '/data' do
   end
   
   # Return the values
-  "#{outputArray[0].to_i},#{outputArray[1].to_i},#{outputArray[2].to_i},#{outputArray[3].to_i},#{outputArray[4].to_i}"
+  # TODO: Instead of returning a line of text, we should probably return some XML or something, this seems pretty hacky as it is
+  "*#{outputArray[0].to_i},#{outputArray[1].to_i},#{outputArray[2].to_i},#{outputArray[3].to_i},#{outputArray[4].to_i}*"
   
   
   # TODO: Log the API hit. Store the time and the device ID.
