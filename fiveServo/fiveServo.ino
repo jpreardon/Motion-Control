@@ -1,12 +1,20 @@
 // 5 Servos Controlled by a total amature
 // Created: 2011-11-25
 // JP Reardon http://jpreardon.com/
+// Modified 2012-02-05: Rewired a bunch of stuff only to find that the SoftwareSerial library is incompatable 
+//                      with the Servo library (serial comms cause the servos to jump). This is kind of sucky
+//                      since I'll have to use the onboard serial, so no debugging. On the other hand, it will
+//                      probably be more stable to use onboard serial anyway. Will get rid of the SoftwareSerial
+//                      code in the next rev.
+// Modified 2012-01-15: Adding serial comms for RN-134 WiFly board
 // Modified 2012-01-02: Getting rid of the pushbutton and LED stuff, for now anyway
 // Modified 2011-12-13: Refactoring a bit, adding center offsets, min/max angles, and serial control
 // Modified 2011-12-11: Testing out slow servo functions
 
 #include <Servo.h>
 #include <SoftwareSerial.h>
+
+SoftwareSerial mySerial(10, 11);
 
 Servo servo[5];           // Servo array
 int servoCenterOffset[5];  // Declare the servoCenterOffset array
@@ -20,6 +28,7 @@ int servoPosition[5] = {50, 50, 50, 50, 50};
 void setup()
 {
  
+
   // Set up the serial connection and send some junk
   Serial.begin(9600);
   Serial.print("fiveServo ");
@@ -53,6 +62,14 @@ void setup()
 
 void loop()
 {
+  
+  // DO SOMETHING!!!  
+  
+  getStockData();
+  delay(5000);
+  
+  // This was for debugging
+  /*
   // Check for input from serial, if we have some, make some moves
   if(Serial.available() > 0){
     commandString = commandString + char(Serial.read());
@@ -70,6 +87,7 @@ void loop()
       Serial.println("Done, current positions: " + String(servoPosition[0]) + ", " + String(servoPosition[1]) + ", " + servoPosition[2] + ", " + String(servoPosition[3]) + ", " + String(servoPosition[4]));
     }
   }
+  */
 }
 
 // This moves all of the servos their entire range a couple times
@@ -88,6 +106,7 @@ void startUpExercise(){
 }
 
 // Moves all servos to the requested positions, positions should be given as an integer between 0 and 100
+// TODO: This needs to check the input values to make sure they are valid. The map function doesn't seem to do that, invalid values can move servos past the min/max
 void moveAllByPercent(int value1, int value2, int value3, int value4, int value5){
   
   // Map the percentage values to angles while respecting the minimum and maximum angles
@@ -104,6 +123,7 @@ void moveAllByPercent(int value1, int value2, int value3, int value4, int value5
 // Moves all servos to the desired position at the desired speed, positions should be expressed as degrees between 0 and 180
 // The center offsets are applied in this function. No direct servo movement should happen outside of this function without
 // refactoring something somewhere.
+// TODO: This needs to check the input values to make sure they are valid, or at least ensure that we won't try to move to invalid locations
 void slowMoveAll(int delayTime, int pos1, int pos2, int pos3, int pos4, int pos5){
   
   int finalPosition[5] = {pos1, pos2, pos3, pos4, pos5};  // Put desired final positions into an array
@@ -143,9 +163,89 @@ void slowMoveAll(int delayTime, int pos1, int pos2, int pos3, int pos4, int pos5
 }
 
 // This converts String objects to integers, it does no error checking at all
+// TODO: this should be cleaned up and possibly moved to a library
 int stringToInt(String ourString){
   char this_char[ourString.length() + 1];
   ourString.toCharArray(this_char, sizeof(this_char));
   int iOurString = atoi(this_char); 
   return iOurString;
+}
+
+// Get the stock data from the web service, note that this expects data from OUR webservice and doesn't try
+// to get data from Yahoo, Google etc. Our webservice is very simplified and sends back exactly what we need
+// in order to move the sculpture. Most of the logic is happening on the web service side. 
+// TODO: The host, port and URL data is hardcoded here. At minimum, the host should come from what is set on the WiFly
+void getStockData() {
+  /*
+  We'll be talking to the RN-134 board via serial, here's what needs to happen:
+  
+  - Open the serial connection
+  - Put the WiFly board in command mode (Send "$$$", then wait a few miliseconds)
+  - Inspect the return value on the serial interface, if it is what we expect ("CMD"), turn on a "connected" LED, if it isn't on already
+  - Actually connect to a server and get some data
+     - send the open command ("open <server> <port>\r\n")
+     - check to make sure it opened ("*OPEN*" is in the serial buffer)
+     - send the GET command (GET <url> HTTP/1.0\r\nhost: <server>\r\n\r\n
+  - Parse what is returned
+     - If it is a 200 AND it has the data we want, light a "success" LED and move the sculpture to the desired positions, also, if "*CLOS* is in the return, we may not need to EXIT later
+     - Else, light the "error" LED
+  - Maybe issue "exit" command to serial interface, then close the interface, don't know if we really need to do that or not
+  */
+  
+  // Open the serial connection
+  Serial.println("---------------------------------------------------------------");
+  Serial.println("Opening software serial connection");
+  mySerial.begin(9600);
+  // Put the WiFly board in command mode (Send "$$$", then wait a few seconds)
+  delay(1000);
+  Serial.println("Entering CMD mode");
+  mySerial.print("$$$");
+  delay(5000);
+  // Spit out what is in the buffer
+  Serial.print(mySerial.available());
+  Serial.println(" bytes in buffer");
+  if (mySerial.available()) {
+    while (mySerial.available()) {
+      Serial.print(char(mySerial.read()));
+      delay(50);
+    }
+  }
+  Serial.println("Sending open command");
+  mySerial.print("open\r\n");
+  // We have to test the buffer to see when stuff starts coming in
+  for (int i = 0; i < 1000; i++){
+    if (mySerial.available()) {
+      while (mySerial.available()) {
+        Serial.print(char(mySerial.read()));
+      }
+    }
+    delay(5);
+  }
+  Serial.println(" ");
+  delay(1000);
+  
+  
+  
+  // send the GET command (GET <url> HTTP/1.0\r\nhost: <server>\r\n\r\n
+  // TODO: The host parameter should not be hardcoded here
+  Serial.println("Sending GET command...");
+  mySerial.print("GET /data HTTP/1.0\r\nhost: 10.0.1.8\r\n\r\n");
+  // We have to test the buffer to see when stuff starts coming in
+  Serial.println("Waiting for informations...");
+  for (int i = 0; i < 1000; i++){
+    if (mySerial.available()) {
+      while (mySerial.available()) {
+        Serial.print(char(mySerial.read()));
+      }
+    }
+    delay(5);
+  }
+  Serial.println(" ");
+  delay(1000);
+  Serial.println("Closing CMD mode");
+  mySerial.println("exit");
+  delay(1000);
+  mySerial.end();
+  Serial.println("---------------------------------------------------------------");
+  
 }
