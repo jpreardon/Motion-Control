@@ -1,6 +1,9 @@
 // 5 Servos Controlled by a total amature
 // Created: 2011-11-25
 // JP Reardon http://jpreardon.com/
+// Modified 2012-02-12: It's sloppy, but it is working over the hardware serial port. The web server seems to be 
+//                      getting some invalid responses, will need to check into why, or at least account for it
+//                      somehow.
 // Modified 2012-02-12: It seems like the "host" bit doesn't need to be sent to the webserver, not the test one
 //                      we have set up anyway. Taking it out of the code.
 // Modified 2012-02-12: Put in some basic error checking on the serial comms. Next step is to rip start sending
@@ -16,12 +19,11 @@
 // Modified 2011-12-11: Testing out slow servo functions
 
 #include <Servo.h>
-// TODO: SoftwareSerial library is incompatible with the Servo library, once we get things working, it got to be got
 #include <SoftwareSerial.h>
 
-// TODO: This needs to be got after we done
-SoftwareSerial mySerial(10, 11);
-
+// WARNING: Setting debug to "true" will send debug information to the software serial port, this will cause the 
+//          servos to jump (probably). You may want to disconnect the servos if you want to debug...
+const boolean debug = false;
 Servo servo[5];           // Servo array
 int servoCenterOffset[5];  // Declare the servoCenterOffset array
 int servoMinAngle;         // Declare the minimum angle variable
@@ -30,25 +32,25 @@ int servoSpeed;            // Declare the speed variable
 const String versionNumber = "0.1";
 String commandString;
 int servoPosition[5] = {50, 50, 50, 50, 50};
+SoftwareSerial softSerial = SoftwareSerial(10, 11);
 
 void setup()
 {
  
 
-  // Set up the serial connection and send some junk
-  // TODO: This serial stuff will need to be used by the Wifly board, maybe move it into a debug mode or something
-  Serial.begin(9600);
-  Serial.print("fiveServo ");
-  Serial.println(versionNumber);
+  if (debug) {
+    // Set up the serial connection for debug messages
+    softSerial.begin(9600);
+    softSerial.print("fiveServo ");
+    softSerial.println(versionNumber);
+  }
   
-  /*
   // Attach servos to their respective outputs
   servo[0].attach(2);
   servo[1].attach(3);
   servo[2].attach(4);
   servo[3].attach(5);
   servo[4].attach(6);
-  */
   
   // Set servo center offsets
   // This is done to adjust for mechanical differences in the servos or in
@@ -63,19 +65,32 @@ void setup()
   servoMaxAngle = 165;    // Set the servo maximum angle
   servoSpeed = 9;         // Set the speed
   
-  Serial.println("Begining Startup Exercise");
-  // startUpExercise();                                          // Run the startup exercise, this should be cooler than it is
-  Serial.println("Exercise complete, ready for input...");
+  if (debug) softSerial.println("Begining Startup Exercise");
+  startUpExercise();                                          // Run the startup exercise, this should be cooler than it is
+  if (debug) softSerial.println("Exercise complete, ready for input...");
 }
 
 
 void loop()
 {
   
-  // DO SOMETHING!!!  
-  
-  getStockData();
-  //delay(5000);
+  // Get the stock data  
+  String rawStockData = getStockData();
+  // Check to make sure we got reasonable data
+  if (rawStockData.indexOf("*") == -1) {
+    // Split it up so the servo function can read it
+    String stockValues[5];
+    int delimiterPosition = rawStockData.indexOf(",");
+    int lastDelimiterPosition = 0;
+    for (int i = 0; i < 5; i++) {
+      stockValues[i] = rawStockData.substring(lastDelimiterPosition, delimiterPosition);
+      lastDelimiterPosition = delimiterPosition + 1;
+      delimiterPosition = rawStockData.indexOf(",", lastDelimiterPosition);
+    }
+    // Send it to the servos
+    moveAllByPercent(stringToInt(stockValues[0]), stringToInt(stockValues[1]), stringToInt(stockValues[2]), stringToInt(stockValues[3]), stringToInt(stockValues[4]));
+  }
+  delay(5000);
   
 }
 
@@ -164,9 +179,9 @@ String getBuffer(int timeOutSecs=2) {
   String buffer;
   long timeOut = millis() + (timeOutSecs * 1000);
   while (timeOut > millis() || millis() < 5000) {
-    if (mySerial.available()) {
-      while (mySerial.available()) {
-        buffer += char(mySerial.read());
+    if (Serial.available()) {
+      while (Serial.available()) {
+        buffer += char(Serial.read());
       }
     }
   }
@@ -177,11 +192,11 @@ void resetWiFly() {
     // Send an exit/close/exit commands for good measure
     // This is hacky, but I've been in situations where it gets stuck in command mode and 
     // exit or close by itself didn't work :(
-    mySerial.println("close");
+    Serial.println("close");
     delay(2000);
-    mySerial.println("exit");
+    Serial.println("exit");
     delay(2000);
-    mySerial.flush();
+    Serial.flush();
     delay(2000);
 }
 
@@ -198,7 +213,7 @@ String getStockValues(String inputData) {
 // to get data from Yahoo, Google etc. Our webservice is very simplified and sends back exactly what we need
 // in order to move the sculpture. Most of the logic is happening on the web service side. 
 // TODO: The host, port and URL data is hardcoded here. At minimum, the host should come from what is set on the WiFly
-void getStockData() {
+String getStockData() {
   /*
   We'll be talking to the RN-134 board via serial, here's what needs to happen:
   
@@ -216,75 +231,87 @@ void getStockData() {
   */
   
   // Open the serial connection
-  Serial.println("---------------------------------------------------------------");
-  Serial.println("Opening software serial connection");
-  mySerial.begin(9600);
+  if (debug) {
+    Serial.println("---------------------------------------------------------------");
+    Serial.println("Opening software serial connection");
+  }
+  Serial.begin(9600);
   String buffer;
+  String stockValues;
   
   
   // Put the WiFly board in command mode (Send "$$$", then wait a few seconds)
-  Serial.println("Entering CMD mode");
-  mySerial.print("$$$");
+  if (debug) softSerial.println("Entering CMD mode");
+  Serial.print("$$$");
   delay(2000);
   // TODO: We should get "CMD" Back here, if we don't, stop this nonsense
   buffer = getBuffer();
   if (buffer.indexOf("CMD") == -1) {
-    Serial.println("ERROR: Not in command mode, exiting loop");
-    Serial.print("Buffer: ");
-    Serial.print(buffer);
+    if (debug) {
+      softSerial.println("ERROR: Not in command mode, exiting loop");
+      softSerial.print("Buffer: ");
+      softSerial.print(buffer);
+    }
     resetWiFly();
-    return;
+    return "*";
   } 
   else
   {
-    Serial.println("OK: In command mode");
+    if (debug) softSerial.println("OK: In command mode");
   }
   
-  Serial.println("Sending open command");
-  mySerial.print("open\r\n");
+  if (debug) softSerial.println("Sending open command");
+  Serial.print("open\r\n");
   // TODO: Some random crap ends up in the buffer here, but at the end, we should see "*OPEN*", if not, we gots problems
   buffer = getBuffer();
   if (buffer.indexOf("*OPEN*") == -1) {
-    Serial.println("ERROR: Not open, exiting loop");
-    Serial.print("Buffer: ");
-    Serial.print(buffer);
+    if (debug) {
+      softSerial.println("ERROR: Not open, exiting loop");
+      softSerial.print("Buffer: ");
+      softSerial.print(buffer);
+    }
     resetWiFly();
-    return;
+    return "*";
   } 
   else
   {
-    Serial.println("OK: Open!");
+    if (debug) softSerial.println("OK: Open!");
   }
   
   
   // send the GET command (GET <url> HTTP/1.0\r\nhost: <server>\r\n\r\n
   // TODO: The host parameter should not be hardcoded here
-  Serial.println("Sending GET command...");
-  mySerial.print("GET /data HTTP/1.0\r\n\r\n");
+  if (debug) softSerial.println("Sending GET command...");
+  Serial.print("GET /data HTTP/1.0\r\n\r\n");
   // TODO: Here's were we should get the data. We should look for "*CLOS*", if we see that, we should have something to test.
   //       Inside the buffer, we should see out data (some numbers inside of brackets "[]", if we see those, parse them out,
   //       if not, bail with an error.
   buffer = getBuffer();
   if (buffer.indexOf("*CLOS*") == -1) {
-    Serial.println("ERROR: Malformed response from WiFly, exiting loop");
-    Serial.print("Buffer: ");
-    Serial.print(buffer);
+    if (debug) {
+      softSerial.println("ERROR: Malformed response from WiFly, exiting loop");
+      softSerial.print("Buffer: ");
+      softSerial.print(buffer);
+    }
     resetWiFly();
-    return;
+    return "*";
   } 
   else
   {
-    Serial.print("OK: Values = ");
-    Serial.println(getStockValues(buffer));
+    stockValues = getStockValues(buffer);
+    if (debug) {
+      softSerial.print("OK: Values = ");
+      softSerial.println(stockValues);
+    }
   }
   
   
-  Serial.println("Closing CMD mode");
-  mySerial.println("exit");
-  // TODO: Nothing seems to come after the exit command...
-  // Spit out what is in the buffer
-  Serial.print(getBuffer());
-  mySerial.end();
-  Serial.println("---------------------------------------------------------------");
+  if (debug) softSerial.println("Closing CMD mode");
+  Serial.println("exit");
+  // Nothing seems to come back from WiFly after the exit command...
+  Serial.end();
+  if (debug) softSerial.println("---------------------------------------------------------------");
+  
+  return stockValues;
   
 }
