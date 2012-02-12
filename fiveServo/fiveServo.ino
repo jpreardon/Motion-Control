@@ -1,6 +1,8 @@
 // 5 Servos Controlled by a total amature
 // Created: 2011-11-25
 // JP Reardon http://jpreardon.com/
+// Modified 2012-02-12: Put in some basic error checking on the serial comms. Next step is to rip start sending
+//                      the WiFly commands to the hardware serial port.
 // Modified 2012-02-05: Rewired a bunch of stuff only to find that the SoftwareSerial library is incompatable 
 //                      with the Servo library (serial comms cause the servos to jump). This is kind of sucky
 //                      since I'll have to use the onboard serial, so no debugging. On the other hand, it will
@@ -12,8 +14,10 @@
 // Modified 2011-12-11: Testing out slow servo functions
 
 #include <Servo.h>
+// TODO: SoftwareSerial library is incompatible with the Servo library, once we get things working, it got to be got
 #include <SoftwareSerial.h>
 
+// TODO: This needs to be got after we done
 SoftwareSerial mySerial(10, 11);
 
 Servo servo[5];           // Servo array
@@ -30,16 +34,19 @@ void setup()
  
 
   // Set up the serial connection and send some junk
+  // TODO: This serial stuff will need to be used by the Wifly board, maybe move it into a debug mode or something
   Serial.begin(9600);
   Serial.print("fiveServo ");
   Serial.println(versionNumber);
   
+  /*
   // Attach servos to their respective outputs
   servo[0].attach(2);
   servo[1].attach(3);
   servo[2].attach(4);
   servo[3].attach(5);
   servo[4].attach(6);
+  */
   
   // Set servo center offsets
   // This is done to adjust for mechanical differences in the servos or in
@@ -55,7 +62,7 @@ void setup()
   servoSpeed = 9;         // Set the speed
   
   Serial.println("Begining Startup Exercise");
-  startUpExercise();                                          // Run the startup exercise, this should be cooler than it is
+  // startUpExercise();                                          // Run the startup exercise, this should be cooler than it is
   Serial.println("Exercise complete, ready for input...");
 }
 
@@ -66,28 +73,8 @@ void loop()
   // DO SOMETHING!!!  
   
   getStockData();
-  delay(5000);
+  //delay(5000);
   
-  // This was for debugging
-  /*
-  // Check for input from serial, if we have some, make some moves
-  if(Serial.available() > 0){
-    commandString = commandString + char(Serial.read());
-    if(commandString.endsWith("$")){
-      // Remove the control character at the end
-      commandString = commandString.substring(0, commandString.length() - 1);
-      // Put the position in the array
-      servoPosition[stringToInt(commandString.substring(0, 1))] = stringToInt(commandString.substring(2, commandString.length()));
-      // Say what we are doing
-      Serial.println("Moving " + commandString.substring(0, 1) + " to " + String(servoPosition[stringToInt(commandString.substring(0, 1))]));
-      // Empty the commandString
-      commandString = "";
-      // Do the move
-      moveAllByPercent(servoPosition[0], servoPosition[1], servoPosition[2], servoPosition[3], servoPosition[4]);
-      Serial.println("Done, current positions: " + String(servoPosition[0]) + ", " + String(servoPosition[1]) + ", " + servoPosition[2] + ", " + String(servoPosition[3]) + ", " + String(servoPosition[4]));
-    }
-  }
-  */
 }
 
 // This moves all of the servos their entire range a couple times
@@ -171,6 +158,40 @@ int stringToInt(String ourString){
   return iOurString;
 }
 
+String getBuffer(int timeOutSecs=2) {
+  String buffer;
+  long timeOut = millis() + (timeOutSecs * 1000);
+  while (timeOut > millis() || millis() < 5000) {
+    if (mySerial.available()) {
+      while (mySerial.available()) {
+        buffer += char(mySerial.read());
+      }
+    }
+  }
+  return buffer;
+}
+
+void resetWiFly() {
+    // Send an exit/close/exit commands for good measure
+    // This is hacky, but I've been in situations where it gets stuck in command mode and 
+    // exit or close by itself didn't work :(
+    mySerial.println("close");
+    delay(2000);
+    mySerial.println("exit");
+    delay(2000);
+    mySerial.flush();
+    delay(2000);
+}
+
+String getStockValues(String inputData) {
+  // The data we want is between brackets, find that stuff!
+  // TODO: This puppy needs some error checking
+  int openBracket = inputData.indexOf("[");
+  int closeBracket = inputData.indexOf("]");
+  String outputData = inputData.substring(openBracket + 1, closeBracket);
+  return outputData;
+}
+
 // Get the stock data from the web service, note that this expects data from OUR webservice and doesn't try
 // to get data from Yahoo, Google etc. Our webservice is very simplified and sends back exactly what we need
 // in order to move the sculpture. Most of the logic is happening on the web service side. 
@@ -196,55 +217,71 @@ void getStockData() {
   Serial.println("---------------------------------------------------------------");
   Serial.println("Opening software serial connection");
   mySerial.begin(9600);
+  String buffer;
+  
+  
   // Put the WiFly board in command mode (Send "$$$", then wait a few seconds)
-  delay(1000);
   Serial.println("Entering CMD mode");
   mySerial.print("$$$");
-  delay(5000);
-  // Spit out what is in the buffer
-  Serial.print(mySerial.available());
-  Serial.println(" bytes in buffer");
-  if (mySerial.available()) {
-    while (mySerial.available()) {
-      Serial.print(char(mySerial.read()));
-      delay(50);
-    }
+  delay(2000);
+  // TODO: We should get "CMD" Back here, if we don't, stop this nonsense
+  buffer = getBuffer();
+  if (buffer.indexOf("CMD") == -1) {
+    Serial.println("ERROR: Not in command mode, exiting loop");
+    Serial.print("Buffer: ");
+    Serial.print(buffer);
+    resetWiFly();
+    return;
+  } 
+  else
+  {
+    Serial.println("OK: In command mode");
   }
+  
   Serial.println("Sending open command");
   mySerial.print("open\r\n");
-  // We have to test the buffer to see when stuff starts coming in
-  for (int i = 0; i < 1000; i++){
-    if (mySerial.available()) {
-      while (mySerial.available()) {
-        Serial.print(char(mySerial.read()));
-      }
-    }
-    delay(5);
+  // TODO: Some random crap ends up in the buffer here, but at the end, we should see "*OPEN*", if not, we gots problems
+  buffer = getBuffer();
+  if (buffer.indexOf("*OPEN*") == -1) {
+    Serial.println("ERROR: Not open, exiting loop");
+    Serial.print("Buffer: ");
+    Serial.print(buffer);
+    resetWiFly();
+    return;
+  } 
+  else
+  {
+    Serial.println("OK: Open!");
   }
-  Serial.println(" ");
-  delay(1000);
-  
   
   
   // send the GET command (GET <url> HTTP/1.0\r\nhost: <server>\r\n\r\n
   // TODO: The host parameter should not be hardcoded here
   Serial.println("Sending GET command...");
   mySerial.print("GET /data HTTP/1.0\r\nhost: 10.0.1.8\r\n\r\n");
-  // We have to test the buffer to see when stuff starts coming in
-  Serial.println("Waiting for informations...");
-  for (int i = 0; i < 1000; i++){
-    if (mySerial.available()) {
-      while (mySerial.available()) {
-        Serial.print(char(mySerial.read()));
-      }
-    }
-    delay(5);
+  // TODO: Here's were we should get the data. We should look for "*CLOS*", if we see that, we should have something to test.
+  //       Inside the buffer, we should see out data (some numbers inside of brackets "[]", if we see those, parse them out,
+  //       if not, bail with an error.
+  buffer = getBuffer();
+  if (buffer.indexOf("*CLOS*") == -1) {
+    Serial.println("ERROR: Malformed response from WiFly, exiting loop");
+    Serial.print("Buffer: ");
+    Serial.print(buffer);
+    resetWiFly();
+    return;
+  } 
+  else
+  {
+    Serial.print("OK: Values = ");
+    Serial.println(getStockValues(buffer));
   }
-  Serial.println(" ");
-  delay(1000);
+  
+  
   Serial.println("Closing CMD mode");
   mySerial.println("exit");
-  delay(1000);
+  // TODO: Nothing seems to come after the exit command...
+  // Spit out what is in the buffer
+  Serial.print(getBuffer());
   mySerial.end();
   Serial.println("---------------------------------------------------------------");
   
