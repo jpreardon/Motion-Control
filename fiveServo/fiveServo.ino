@@ -1,6 +1,8 @@
 // 5 Servos Controlled by a total amature
 // Created: 2011-11-25
 // JP Reardon http://jpreardon.com/
+// Modified 2012-02-12: It seems like the "host" bit doesn't need to be sent to the webserver, not the test one
+//                      we have set up anyway. Taking it out of the code.
 // Modified 2012-02-12: Put in some basic error checking on the serial comms. Next step is to rip start sending
 //                      the WiFly commands to the hardware serial port.
 // Modified 2012-02-05: Rewired a bunch of stuff only to find that the SoftwareSerial library is incompatable 
@@ -258,7 +260,7 @@ void getStockData() {
   // send the GET command (GET <url> HTTP/1.0\r\nhost: <server>\r\n\r\n
   // TODO: The host parameter should not be hardcoded here
   Serial.println("Sending GET command...");
-  mySerial.print("GET /data HTTP/1.0\r\nhost: 10.0.1.8\r\n\r\n");
+  mySerial.print("GET /data HTTP/1.0\r\n\r\n");
   // TODO: Here's were we should get the data. We should look for "*CLOS*", if we see that, we should have something to test.
   //       Inside the buffer, we should see out data (some numbers inside of brackets "[]", if we see those, parse them out,
   //       if not, bail with an error.
