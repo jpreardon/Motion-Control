@@ -12,13 +12,13 @@ get '/data' do
   # TODO: Return the "chart" as the last five days worth of data expressed as point between 0 and 100 Yeah, we're doing this first. The idea being that the device will be asking us for data every 5 minutes or so. The resolution of the device isn't so great that it will matter if the data stale by 5 minutes. This will allow us to return a result immediately, then we can trigger the data acquisition process to actually get the updated data.
   
   # Fetch data from the file
-  dataArray = Array.new
-  outputArray = Array.new
-  File.open('datalog.txt') do |file|
-    while line = file.gets
-      dataArray.push(line.split(',')[1].strip)
-    end
-  end
+  # dataArray = Array.new
+  #   outputArray = Array.new
+  #   File.open('datalog.txt') do |file|
+  #     while line = file.gets
+  #       dataArray.push(line.split(',')[1].strip)
+  #     end
+  #   end
   
   # Turn it into a "chart" (all values between 0 and 100)
   # (value - minimum)/maximum-minimum)*100
