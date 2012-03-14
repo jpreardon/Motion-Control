@@ -28,6 +28,7 @@ get '/data' do
   
   # This is for testing only
   "[#{rand(99)},#{rand(99)},#{rand(99)},#{rand(99)},#{rand(99)}]"
+  # "[50,50,50,50,50]"
   
   # Return the values
   # TODO: Instead of returning a line of text, we should probably return some XML or something, this seems pretty hacky as it is

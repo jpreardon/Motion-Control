@@ -1,9 +1,7 @@
 // 5 Servos Controlled by a total amature
 // Created: 2011-11-25
 // JP Reardon http://jpreardon.com/
-// Modified 2012-02-12: It's sloppy, but it is working over the hardware serial port. The web server seems to be 
-//                      getting some invalid responses, will need to check into why, or at least account for it
-//                      somehow.
+// Modified 2012-02-12: 1
 // Modified 2012-02-12: It seems like the "host" bit doesn't need to be sent to the webserver, not the test one
 //                      we have set up anyway. Taking it out of the code.
 // Modified 2012-02-12: Put in some basic error checking on the serial comms. Next step is to rip start sending
